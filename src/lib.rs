@@ -3,7 +3,6 @@
 use core::{array, future::Future};
 
 pub trait Retry<T, E> {
-    #[must_use = "retry executes the operation; ignoring the result means the operation was never run"]
     fn retry<const N: usize>(self) -> Result<T, [Option<E>; N]>;
 }
 
@@ -27,7 +26,6 @@ where
 }
 
 pub trait RetryFut<T, E> {
-    #[must_use = "retry executes the async operation; ignoring the result means the operation was never awaited"]
     fn retry<const N: usize>(self) -> impl Future<Output = Result<T, [Option<E>; N]>>;
 }
 
