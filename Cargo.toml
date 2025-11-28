@@ -1,0 +1,14 @@
+[package]
+license     = "MIT"
+edition     = "2024"
+version     = "0.1.0"
+name        = "retry_core"
+repository  = "https://github.com/cainthebest/retry_core"
+authors     = ["cainthebest <https://github.com/cainthebest>"]
+description = "Retry library for synchronous and asynchronous functions in no std environment"
+
+[profile.release]
+codegen-units = 1
+opt-level     = 3
+lto           = 'fat'
+debug         = false
