@@ -5,7 +5,7 @@ version     = "0.1.0"
 name        = "retry_core"
 repository  = "https://github.com/cainthebest/retry_core"
 authors     = ["cainthebest <https://github.com/cainthebest>"]
-description = "Retry library for synchronous and asynchronous functions in no std environment"
+description = "A no_std retry library for synchronous and asynchronous fallible operations"
 
 [profile.release]
 codegen-units = 1
