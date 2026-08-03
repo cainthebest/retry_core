@@ -1,11 +1,11 @@
 use core::{mem::MaybeUninit, ptr};
 
-pub(crate) struct AttemptErrorBuffer<E, const ATTEMPTS: usize> {
+pub(crate) struct ErrorBuffer<E, const ATTEMPTS: usize> {
     entries: [MaybeUninit<E>; ATTEMPTS],
     initialized: usize,
 }
 
-impl<E, const ATTEMPTS: usize> AttemptErrorBuffer<E, ATTEMPTS> {
+impl<E, const ATTEMPTS: usize> ErrorBuffer<E, ATTEMPTS> {
     #[inline]
     pub(crate) const fn new() -> Self {
         Self {
@@ -28,7 +28,7 @@ impl<E, const ATTEMPTS: usize> AttemptErrorBuffer<E, ATTEMPTS> {
     }
 
     #[inline]
-    pub(crate) const fn unwrap(&mut self) -> [E; ATTEMPTS] {
+    pub(crate) const fn take(&mut self) -> [E; ATTEMPTS] {
         assert!(
             self.initialized == ATTEMPTS,
             "attempt error buffer must be full before unwrapping"
@@ -64,7 +64,7 @@ impl<E, const ATTEMPTS: usize> AttemptErrorBuffer<E, ATTEMPTS> {
     }
 }
 
-impl<E, const ATTEMPTS: usize> Drop for AttemptErrorBuffer<E, ATTEMPTS> {
+impl<E, const ATTEMPTS: usize> Drop for ErrorBuffer<E, ATTEMPTS> {
     fn drop(&mut self) {
         for index in 0..self.initialized {
             // SAFETY:

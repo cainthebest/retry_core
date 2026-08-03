@@ -1,4 +1,4 @@
-mod errors;
+mod error;
 mod future;
 
-pub(crate) use {errors::AttemptErrorBuffer, future::FutureSlot};
+pub(crate) use {error::ErrorBuffer, future::FutureSlot};

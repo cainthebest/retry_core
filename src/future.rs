@@ -1,7 +1,7 @@
 use {
     crate::{
         FutureMode, Retry,
-        storage::{AttemptErrorBuffer, FutureSlot},
+        storage::{ErrorBuffer, FutureSlot},
     },
     core::{
         hint::cold_path,
@@ -11,39 +11,14 @@ use {
     },
 };
 
-#[inline(always)]
-fn unlikely(condition: bool) -> bool {
-    if condition {
-        cold_path();
-    }
-
-    condition
-}
-
-#[cold]
-#[inline(never)]
-fn panic_polled_after_completion() -> ! {
-    panic!("retry future polled after completion");
-}
+const MAX_READY_FAILURES_PER_POLL: usize = 64;
 
 #[must_use = "futures do nothing unless awaited or polled"]
 pub struct AsyncRetry<F, Fut, E, const ATTEMPTS: usize> {
     operation: F,
     future: FutureSlot<Fut>,
-    errors: AttemptErrorBuffer<E, ATTEMPTS>,
+    errors: ErrorBuffer<E, ATTEMPTS>,
     _pin: PhantomPinned,
-}
-
-impl<F, Fut, E, const ATTEMPTS: usize> AsyncRetry<F, Fut, E, ATTEMPTS> {
-    #[inline]
-    pub(super) fn new(operation: F) -> Self {
-        Self {
-            operation,
-            future: FutureSlot::new(),
-            errors: AttemptErrorBuffer::new(),
-            _pin: PhantomPinned,
-        }
-    }
 }
 
 impl<F, Fut, T, E, const ATTEMPTS: usize> Future for AsyncRetry<F, Fut, E, ATTEMPTS>
@@ -59,14 +34,19 @@ where
         // are not structurally pinned and may be accessed mutably.
         let this = unsafe { self.get_unchecked_mut() };
 
-        loop {
-            if unlikely(this.future.is_complete()) {
-                panic_polled_after_completion();
-            }
+        if this.future.is_complete() {
+            cold_path();
 
+            panic!("retry future polled after completion");
+        }
+
+        let mut remaining = MAX_READY_FAILURES_PER_POLL;
+
+        loop {
             if this.errors.is_full() {
                 this.future.complete();
-                return Poll::Ready(Err(this.errors.unwrap()));
+
+                return Poll::Ready(Err(this.errors.take()));
             }
 
             this.future.ensure_active(|| (this.operation)());
@@ -81,6 +61,22 @@ where
                 Poll::Ready(Err(error)) => {
                     this.future.clear_ready_future();
                     this.errors.push(error);
+
+                    if this.errors.is_full() {
+                        this.future.complete();
+
+                        return Poll::Ready(Err(this.errors.take()));
+                    }
+
+                    if ATTEMPTS > MAX_READY_FAILURES_PER_POLL {
+                        remaining -= 1;
+
+                        if remaining == 0 {
+                            cx.waker().wake_by_ref();
+
+                            return Poll::Pending;
+                        }
+                    }
                 }
 
                 Poll::Pending => return Poll::Pending,
@@ -97,18 +93,6 @@ pub struct AsyncRetryOk<F, Fut, const ATTEMPTS: usize> {
     _pin: PhantomPinned,
 }
 
-impl<F, Fut, const ATTEMPTS: usize> AsyncRetryOk<F, Fut, ATTEMPTS> {
-    #[inline]
-    pub(super) fn new(operation: F) -> Self {
-        Self {
-            operation,
-            future: FutureSlot::new(),
-            attempts: 0,
-            _pin: PhantomPinned,
-        }
-    }
-}
-
 impl<F, Fut, T, E, const ATTEMPTS: usize> Future for AsyncRetryOk<F, Fut, ATTEMPTS>
 where
     F: FnMut() -> Fut,
@@ -122,14 +106,18 @@ where
         // are not structurally pinned and may be accessed mutably.
         let this = unsafe { self.get_unchecked_mut() };
 
-        loop {
-            if unlikely(this.future.is_complete()) {
-                panic_polled_after_completion();
-            }
+        if this.future.is_complete() {
+            cold_path();
 
+            panic!("retry future polled after completion");
+        }
+
+        let mut remaining = MAX_READY_FAILURES_PER_POLL;
+
+        loop {
             if this.attempts >= ATTEMPTS {
                 this.future.complete();
-                
+
                 return Poll::Ready(None);
             }
 
@@ -145,6 +133,22 @@ where
                 Poll::Ready(Err(_)) => {
                     this.future.clear_ready_future();
                     this.attempts += 1;
+
+                    if this.attempts >= ATTEMPTS {
+                        this.future.complete();
+
+                        return Poll::Ready(None);
+                    }
+
+                    if ATTEMPTS > MAX_READY_FAILURES_PER_POLL {
+                        remaining -= 1;
+
+                        if remaining == 0 {
+                            cx.waker().wake_by_ref();
+
+                            return Poll::Pending;
+                        }
+                    }
                 }
 
                 Poll::Pending => return Poll::Pending,
@@ -157,22 +161,9 @@ where
 pub struct AsyncRetryOrElse<F, Fut, E, G, const ATTEMPTS: usize> {
     operation: F,
     future: FutureSlot<Fut>,
-    errors: AttemptErrorBuffer<E, ATTEMPTS>,
+    errors: ErrorBuffer<E, ATTEMPTS>,
     fallback: Option<G>,
     _pin: PhantomPinned,
-}
-
-impl<F, Fut, E, G, const ATTEMPTS: usize> AsyncRetryOrElse<F, Fut, E, G, ATTEMPTS> {
-    #[inline]
-    pub(super) fn new(operation: F, fallback: G) -> Self {
-        Self {
-            operation,
-            future: FutureSlot::new(),
-            errors: AttemptErrorBuffer::new(),
-            fallback: Some(fallback),
-            _pin: PhantomPinned,
-        }
-    }
 }
 
 impl<F, Fut, T, E, G, const ATTEMPTS: usize> Future for AsyncRetryOrElse<F, Fut, E, G, ATTEMPTS>
@@ -189,24 +180,25 @@ where
         // are not structurally pinned and may be accessed mutably.
         let this = unsafe { self.get_unchecked_mut() };
 
+        if this.future.is_complete() {
+            cold_path();
+            panic!("retry future polled after completion");
+        }
+
+        if ATTEMPTS == 0 {
+            this.future.complete();
+
+            let fallback = this
+                .fallback
+                .take()
+                .expect("retry fallback was already consumed");
+
+            return Poll::Ready(fallback(this.errors.take()));
+        }
+
+        let mut remaining = MAX_READY_FAILURES_PER_POLL;
+
         loop {
-            if unlikely(this.future.is_complete()) {
-                panic_polled_after_completion();
-            }
-
-            if this.errors.is_full() {
-                this.future.complete();
-
-                let errors = this.errors.unwrap();
-
-                let fallback = this
-                    .fallback
-                    .take()
-                    .expect("retry fallback was already consumed");
-
-                return Poll::Ready(fallback(errors));
-            }
-
             this.future.ensure_active(|| (this.operation)());
 
             match this.future.poll_result(cx) {
@@ -220,6 +212,27 @@ where
                 Poll::Ready(Err(error)) => {
                     this.future.clear_ready_future();
                     this.errors.push(error);
+
+                    if this.errors.is_full() {
+                        this.future.complete();
+
+                        let fallback = this
+                            .fallback
+                            .take()
+                            .expect("retry fallback was already consumed");
+
+                        return Poll::Ready(fallback(this.errors.take()));
+                    }
+
+                    if ATTEMPTS > MAX_READY_FAILURES_PER_POLL {
+                        remaining -= 1;
+
+                        if remaining == 0 {
+                            cx.waker().wake_by_ref();
+
+                            return Poll::Pending;
+                        }
+                    }
                 }
 
                 Poll::Pending => return Poll::Pending,
@@ -234,32 +247,51 @@ where
     Fut: Future<Output = Result<T, E>>,
 {
     type Output = T;
+
     type Error = E;
-    type AttemptErrors<const ATTEMPTS: usize> = [E; ATTEMPTS];
 
-    type RetryResult<const ATTEMPTS: usize> = AsyncRetry<F, Fut, E, ATTEMPTS>;
-    type RetryOption<const ATTEMPTS: usize> = AsyncRetryOk<F, Fut, ATTEMPTS>;
+    type Storage<const ATTEMPTS: usize> = [Self::Error; ATTEMPTS];
 
-    type RetryOrElse<const ATTEMPTS: usize, G>
+    type Result<const ATTEMPTS: usize> = AsyncRetry<F, Fut, E, ATTEMPTS>;
+
+    type Option<const ATTEMPTS: usize> = AsyncRetryOk<F, Fut, ATTEMPTS>;
+
+    type Value<const ATTEMPTS: usize, G>
         = AsyncRetryOrElse<F, Fut, E, G, ATTEMPTS>
     where
-        G: FnOnce(Self::AttemptErrors<ATTEMPTS>) -> Self::Output;
+        G: FnOnce(Self::Storage<ATTEMPTS>) -> Self::Output;
 
     #[inline]
-    fn retry<const ATTEMPTS: usize>(self) -> Self::RetryResult<ATTEMPTS> {
-        AsyncRetry::new(self)
+    fn retry<const ATTEMPTS: usize>(self) -> Self::Result<ATTEMPTS> {
+        AsyncRetry {
+            operation: self,
+            future: FutureSlot::new(),
+            errors: ErrorBuffer::new(),
+            _pin: PhantomPinned,
+        }
     }
 
     #[inline]
-    fn retry_ok<const ATTEMPTS: usize>(self) -> Self::RetryOption<ATTEMPTS> {
-        AsyncRetryOk::new(self)
+    fn retry_ok<const ATTEMPTS: usize>(self) -> Self::Option<ATTEMPTS> {
+        AsyncRetryOk {
+            operation: self,
+            future: FutureSlot::new(),
+            attempts: 0,
+            _pin: PhantomPinned,
+        }
     }
 
     #[inline]
-    fn retry_or_else<const ATTEMPTS: usize, G>(self, fallback: G) -> Self::RetryOrElse<ATTEMPTS, G>
+    fn retry_or_else<const ATTEMPTS: usize, G>(self, fallback: G) -> Self::Value<ATTEMPTS, G>
     where
-        G: FnOnce(Self::AttemptErrors<ATTEMPTS>) -> Self::Output,
+        G: FnOnce(Self::Storage<ATTEMPTS>) -> Self::Output,
     {
-        AsyncRetryOrElse::new(self, fallback)
+        AsyncRetryOrElse {
+            operation: self,
+            future: FutureSlot::new(),
+            errors: ErrorBuffer::new(),
+            fallback: Some(fallback),
+            _pin: PhantomPinned,
+        }
     }
 }

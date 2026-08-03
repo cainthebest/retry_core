@@ -1,24 +1,27 @@
-use crate::{BlockingMode, Retry, storage::AttemptErrorBuffer};
+use crate::{BlockingMode, Retry, storage::ErrorBuffer};
 
 impl<F, T, E> Retry<BlockingMode<T, E>> for F
 where
     F: FnMut() -> Result<T, E>,
 {
     type Output = T;
+
     type Error = E;
-    type AttemptErrors<const ATTEMPTS: usize> = [E; ATTEMPTS];
 
-    type RetryResult<const ATTEMPTS: usize> = Result<T, Self::AttemptErrors<ATTEMPTS>>;
-    type RetryOption<const ATTEMPTS: usize> = Option<T>;
+    type Storage<const ATTEMPTS: usize> = [Self::Error; ATTEMPTS];
 
-    type RetryOrElse<const ATTEMPTS: usize, G>
-        = T
+    type Result<const ATTEMPTS: usize> = Result<Self::Output, Self::Storage<ATTEMPTS>>;
+
+    type Option<const ATTEMPTS: usize> = Option<Self::Output>;
+
+    type Value<const ATTEMPTS: usize, G>
+        = Self::Output
     where
-        G: FnOnce(Self::AttemptErrors<ATTEMPTS>) -> Self::Output;
+        G: FnOnce(Self::Storage<ATTEMPTS>) -> Self::Output;
 
     #[inline]
-    fn retry<const ATTEMPTS: usize>(mut self) -> Self::RetryResult<ATTEMPTS> {
-        let mut errors = AttemptErrorBuffer::<E, ATTEMPTS>::new();
+    fn retry<const ATTEMPTS: usize>(mut self) -> Self::Result<ATTEMPTS> {
+        let mut errors = ErrorBuffer::<Self::Error, ATTEMPTS>::new();
 
         for _ in 0..ATTEMPTS {
             match self() {
@@ -27,11 +30,11 @@ where
             }
         }
 
-        Err(errors.unwrap())
+        Err(errors.take())
     }
 
     #[inline]
-    fn retry_ok<const ATTEMPTS: usize>(mut self) -> Self::RetryOption<ATTEMPTS> {
+    fn retry_ok<const ATTEMPTS: usize>(mut self) -> Self::Option<ATTEMPTS> {
         for _ in 0..ATTEMPTS {
             if let Ok(value) = self() {
                 return Some(value);
@@ -42,9 +45,9 @@ where
     }
 
     #[inline]
-    fn retry_or_else<const ATTEMPTS: usize, G>(self, fallback: G) -> Self::RetryOrElse<ATTEMPTS, G>
+    fn retry_or_else<const ATTEMPTS: usize, G>(self, fallback: G) -> Self::Value<ATTEMPTS, G>
     where
-        G: FnOnce(Self::AttemptErrors<ATTEMPTS>) -> Self::Output,
+        G: FnOnce(Self::Storage<ATTEMPTS>) -> Self::Output,
     {
         match self.retry::<ATTEMPTS>() {
             Ok(value) => value,

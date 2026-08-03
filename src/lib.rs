@@ -10,13 +10,16 @@ mod private {
     pub trait Sealed {}
 }
 
+#[doc(hidden)]
 pub trait RetryMode: private::Sealed {}
 
+#[doc(hidden)]
 pub struct BlockingMode<T, E> {
     _output: PhantomData<fn() -> T>,
     _error: PhantomData<fn() -> E>,
 }
 
+#[doc(hidden)]
 pub struct FutureMode<T, E, Fut> {
     _output: PhantomData<fn() -> T>,
     _error: PhantomData<fn() -> E>,
@@ -37,21 +40,21 @@ where
 
     type Error;
 
-    type AttemptErrors<const ATTEMPTS: usize>;
+    type Storage<const ATTEMPTS: usize>;
 
-    type RetryResult<const ATTEMPTS: usize>;
+    type Result<const ATTEMPTS: usize>;
 
-    type RetryOption<const ATTEMPTS: usize>;
+    type Option<const ATTEMPTS: usize>;
 
-    type RetryOrElse<const ATTEMPTS: usize, F>
+    type Value<const ATTEMPTS: usize, F>
     where
-        F: FnOnce(Self::AttemptErrors<ATTEMPTS>) -> Self::Output;
+        F: FnOnce(Self::Storage<ATTEMPTS>) -> Self::Output;
 
-    fn retry<const ATTEMPTS: usize>(self) -> Self::RetryResult<ATTEMPTS>;
+    fn retry<const ATTEMPTS: usize>(self) -> Self::Result<ATTEMPTS>;
 
-    fn retry_ok<const ATTEMPTS: usize>(self) -> Self::RetryOption<ATTEMPTS>;
+    fn retry_ok<const ATTEMPTS: usize>(self) -> Self::Option<ATTEMPTS>;
 
-    fn retry_or_else<const ATTEMPTS: usize, F>(self, fallback: F) -> Self::RetryOrElse<ATTEMPTS, F>
+    fn retry_or_else<const ATTEMPTS: usize, F>(self, fallback: F) -> Self::Value<ATTEMPTS, F>
     where
-        F: FnOnce(Self::AttemptErrors<ATTEMPTS>) -> Self::Output;
+        F: FnOnce(Self::Storage<ATTEMPTS>) -> Self::Output;
 }
