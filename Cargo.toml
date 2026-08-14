@@ -16,7 +16,7 @@ lto           = 'fat'
 debug         = false
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt"] }
+tokio = { version = "1", default-features = false, features = ["macros", "rt"] }
 
 [[example]]
 name = "sync_args"
