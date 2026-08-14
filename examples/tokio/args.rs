@@ -18,7 +18,7 @@
 //! - [`Retry::retry`]: return the first success or every failed error.
 //! - [`Retry::retry_ok`]: return the first success and discard errors.
 //! - [`Retry::retry_or_else`]: return the first success or invoke a fallback.
-//! 
+//!
 //! The crate itself is runtime independent
 //! Tokio is used here only to drive the returned futures.
 //!
