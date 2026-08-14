@@ -1,6 +1,7 @@
 > [!IMPORTANT]
-> **Beta:** `retry_core` is currently in beta and under active development.
-> APIs may change before the stable `v1.0.0` release. The crate currently has no test suite or benchmarks, so correctness and performance have not been thoroughly validated.
+> `retry_core` is currently in beta and under active development.
+> APIs may change before the stable `v1.0.0` release.
+> The crate currently has no test suite or benchmarks.
 > Production use is not recommended yet.
 
 <h1 align="center">Retry Core</h1>
@@ -19,7 +20,6 @@
   <a href="https://github.com/cainthebest/retry_core/issues">
     <img src="https://img.shields.io/github/issues/cainthebest/retry_core?style=for-the-badge&logo=github&logoColor=white&label=issues&labelColor=1b1b1b&color=D97706" alt="Issues">
   </a>
-  <img src="https://img.shields.io/badge/modes-blocking%20%2B%20async-0EA5E9?style=for-the-badge" alt="Blocking and async">
   <a href="https://github.com/cainthebest/retry_core/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-22C55E?style=for-the-badge" alt="MIT License">
   </a>
