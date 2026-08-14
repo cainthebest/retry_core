@@ -11,18 +11,10 @@
 </p>
 
 <p align="center">
-  <a href="https://crates.io/crates/retry_core">
-    <img src="https://img.shields.io/crates/v/retry_core?style=for-the-badge&logo=rust&logoColor=white&label=crates.io&color=CE412B" alt="Crates.io">
-  </a>
-  <a href="https://github.com/cainthebest/retry_core">
-    <img src="https://img.shields.io/badge/source-GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub">
-  </a>
-  <a href="https://github.com/cainthebest/retry_core/issues">
-    <img src="https://img.shields.io/github/issues/cainthebest/retry_core?style=for-the-badge&logo=github&logoColor=white&label=issues&labelColor=1b1b1b&color=D97706" alt="Issues">
-  </a>
-  <a href="https://github.com/cainthebest/retry_core/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-22C55E?style=for-the-badge" alt="MIT License">
-  </a>
+  <a href="https://crates.io/crates/retry_core"><img src="https://img.shields.io/crates/v/retry_core?style=for-the-badge&logo=rust&logoColor=white&label=crates.io&color=CE412B" alt="Crates.io"></a>
+  <a href="https://github.com/cainthebest/retry_core"><img src="https://img.shields.io/badge/source-GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"></a>
+  <a href="https://github.com/cainthebest/retry_core/issues"><img src="https://img.shields.io/github/issues/cainthebest/retry_core?style=for-the-badge&logo=github&logoColor=white&label=issues&labelColor=1b1b1b&color=D97706" alt="Issues"></a>
+  <a href="https://github.com/cainthebest/retry_core/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-22C55E?style=for-the-badge" alt="MIT License"></a>
 </p>
 
 ---
