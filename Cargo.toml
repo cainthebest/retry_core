@@ -1,11 +1,11 @@
 [package]
 license     = "MIT"
 edition     = "2024"
-version     = "0.2.0"
+version     = "1.0.0"
 name        = "retry_core"
 repository  = "https://github.com/cainthebest/retry_core"
 authors     = ["cainthebest <https://github.com/cainthebest>"]
-description = "A retry library for synchronous fallible operations"
+description = "A retry library for fallible blocking and async operations"
 
 [profile.release]
 codegen-units = 1
