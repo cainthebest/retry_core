@@ -1,6 +1,6 @@
-use core::{mem::MaybeUninit, ptr};
+use core::{mem::MaybeUninit, ptr, slice};
 
-pub(crate) struct ErrorBuffer<E, const ATTEMPTS: usize> {
+pub struct ErrorBuffer<E, const ATTEMPTS: usize> {
     entries: [MaybeUninit<E>; ATTEMPTS],
     initialized: usize,
 }
@@ -15,8 +15,28 @@ impl<E, const ATTEMPTS: usize> ErrorBuffer<E, ATTEMPTS> {
     }
 
     #[inline]
-    pub(crate) const fn is_full(&self) -> bool {
+    pub const fn len(&self) -> usize {
+        self.initialized
+    }
+
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.initialized == 0
+    }
+
+    #[inline]
+    pub const fn is_full(&self) -> bool {
         self.initialized == ATTEMPTS
+    }
+
+    #[inline]
+    pub const fn capacity(&self) -> usize {
+        ATTEMPTS
+    }
+
+    #[inline]
+    pub fn as_slice(&self) -> &[E] {
+        unsafe { slice::from_raw_parts(self.entries.as_ptr().cast::<E>(), self.initialized) }
     }
 
     #[inline]
@@ -36,16 +56,6 @@ impl<E, const ATTEMPTS: usize> ErrorBuffer<E, ATTEMPTS> {
 
         let mut output = MaybeUninit::<[E; ATTEMPTS]>::uninit();
 
-        // SAFETY:
-        //
-        // `initialized == ATTEMPTS` guarantees every source entry is initialized.
-        // `self.entries` and `output` are distinct storage locations, so they do not overlap.
-        //
-        // Both pointers are properly aligned, including when `ATTEMPTS == 0`.
-        // `copy_nonoverlapping` preserves initialization state exactly.
-        //
-        // This is a move, not a clone: after copying the bytes, `initialized` is set
-        // to zero so the source entries are no longer dropped by this buffer.
         unsafe {
             ptr::copy_nonoverlapping(
                 self.entries.as_ptr(),
@@ -56,20 +66,20 @@ impl<E, const ATTEMPTS: usize> ErrorBuffer<E, ATTEMPTS> {
 
         self.initialized = 0;
 
-        // SAFETY:
-        //
-        // The assertion above guarantees all `ATTEMPTS` entries were initialized,
-        // and the copy above moved those initialized entries into `output`.
         unsafe { output.assume_init() }
+    }
+}
+
+impl<E, const ATTEMPTS: usize> AsRef<[E]> for ErrorBuffer<E, ATTEMPTS> {
+    #[inline]
+    fn as_ref(&self) -> &[E] {
+        self.as_slice()
     }
 }
 
 impl<E, const ATTEMPTS: usize> Drop for ErrorBuffer<E, ATTEMPTS> {
     fn drop(&mut self) {
         for index in 0..self.initialized {
-            // SAFETY:
-            //
-            // Every entry below `initialized` is initialized and has not been moved out.
             unsafe {
                 self.entries[index].assume_init_drop();
             }
