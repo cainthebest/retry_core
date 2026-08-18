@@ -50,3 +50,8 @@ Pull requests should remain focused and avoid unrelated changes.
 ## License
 
 `retry_core` is distributed under the [MIT License](https://github.com/cainthebest/retry_core/blob/main/LICENSE).
+
+
+## Wider range of examples
+
+Documentation reference and guidelines for #9.
