@@ -1,8 +1,6 @@
 #![no_std]
 
-use core::marker::PhantomData;
-
-use crate::adapter::RetryPolicy;
+use {crate::adapter::RetryPolicy, core::marker::PhantomData};
 
 pub(crate) mod adapter;
 pub(crate) mod storage;
@@ -54,14 +52,6 @@ where
     where
         F: FnOnce(Self::Errors<ATTEMPTS>) -> Self::Output;
 
-    #[inline]
-    fn retry_policy(self) -> RetryPolicy<Self, Mode> {
-        RetryPolicy {
-            operation: self,
-            _mode: PhantomData,
-        }
-    }
-
     fn retry<const ATTEMPTS: usize>(self) -> Self::RetryResult<ATTEMPTS>;
 
     fn retry_ok<const ATTEMPTS: usize>(self) -> Self::RetryOption<ATTEMPTS>;
@@ -69,4 +59,12 @@ where
     fn retry_or_else<const ATTEMPTS: usize, F>(self, fallback: F) -> Self::RetryValue<ATTEMPTS, F>
     where
         F: FnOnce(Self::Errors<ATTEMPTS>) -> Self::Output;
+
+    #[inline]
+    fn retry_policy(self) -> RetryPolicy<Self, Mode> {
+        RetryPolicy {
+            operation: self,
+            _mode: PhantomData,
+        }
+    }
 }

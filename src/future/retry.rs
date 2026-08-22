@@ -1,251 +1,16 @@
-use core::{
-    future::Future,
-    marker::{PhantomData, PhantomPinned},
-    mem,
-    pin::Pin,
-    task::{Context, Poll, ready},
+use {
+    super::{FutureRetry, MAX_READY_RETRIES_PER_POLL, Phase},
+    crate::{
+        FutureMode, Retry,
+        storage::{ErrorBuffer, FutureSlot},
+    },
+    core::{
+        future::Future,
+        marker::{PhantomData, PhantomPinned},
+        pin::Pin,
+        task::{Context, Poll, ready},
+    },
 };
-
-use crate::{
-    FutureMode, Retry,
-    adapter::{InspectRetry, OnlyIf, RetryDelay, WithDelay},
-    storage::{ErrorBuffer, FutureSlot},
-};
-
-const MAX_READY_RETRIES_PER_POLL: usize = 64;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-enum Phase {
-    Operation,
-    Delay,
-}
-
-#[doc(hidden)]
-pub struct DelayState<S, Fut> {
-    inner: S,
-    future: FutureSlot<Fut>,
-}
-
-impl<S, Fut> DelayState<S, Fut> {
-    #[inline]
-    const fn new(inner: S) -> Self {
-        Self {
-            inner,
-            future: FutureSlot::new(),
-        }
-    }
-}
-
-#[doc(hidden)]
-pub trait FutureRetry<T, E, Fut>: Sized
-where
-    Fut: Future<Output = Result<T, E>>,
-{
-    type Errors<const ATTEMPTS: usize>;
-
-    type DelayState;
-
-    fn call(&mut self) -> Fut;
-
-    fn finish<const ATTEMPTS: usize>(errors: ErrorBuffer<E, ATTEMPTS>) -> Self::Errors<ATTEMPTS>;
-
-    fn delay_state() -> Self::DelayState;
-
-    #[inline]
-    fn should_retry(&mut self, _error: &E) -> bool {
-        true
-    }
-
-    #[inline]
-    fn inspect_retry(&mut self, _retry: usize, _error: &E) {}
-
-    #[inline]
-    fn poll_delay(
-        &mut self,
-        _state: &mut Self::DelayState,
-        _retry: usize,
-        _cx: &mut Context<'_>,
-    ) -> Poll<()> {
-        Poll::Ready(())
-    }
-}
-
-impl<F, T, E, Fut> FutureRetry<T, E, Fut> for F
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = Result<T, E>>,
-{
-    type Errors<const ATTEMPTS: usize> = [E; ATTEMPTS];
-
-    type DelayState = ();
-
-    #[inline]
-    fn call(&mut self) -> Fut {
-        self()
-    }
-
-    #[inline]
-    fn finish<const ATTEMPTS: usize>(
-        mut errors: ErrorBuffer<E, ATTEMPTS>,
-    ) -> Self::Errors<ATTEMPTS> {
-        errors.take()
-    }
-
-    #[inline]
-    fn delay_state() {}
-}
-
-impl<O, P, T, E, Fut> FutureRetry<T, E, Fut> for OnlyIf<O, P>
-where
-    O: FutureRetry<T, E, Fut>,
-    P: FnMut(&E) -> bool,
-    Fut: Future<Output = Result<T, E>>,
-{
-    type Errors<const ATTEMPTS: usize> = ErrorBuffer<E, ATTEMPTS>;
-
-    type DelayState = O::DelayState;
-
-    #[inline]
-    fn call(&mut self) -> Fut {
-        self.operation.call()
-    }
-
-    #[inline]
-    fn finish<const ATTEMPTS: usize>(errors: ErrorBuffer<E, ATTEMPTS>) -> Self::Errors<ATTEMPTS> {
-        errors
-    }
-
-    #[inline]
-    fn delay_state() -> Self::DelayState {
-        O::delay_state()
-    }
-
-    #[inline]
-    fn should_retry(&mut self, error: &E) -> bool {
-        self.operation.should_retry(error) && (self.predicate)(error)
-    }
-
-    #[inline]
-    fn inspect_retry(&mut self, retry: usize, error: &E) {
-        self.operation.inspect_retry(retry, error);
-    }
-
-    #[inline]
-    fn poll_delay(
-        &mut self,
-        state: &mut Self::DelayState,
-        retry: usize,
-        cx: &mut Context<'_>,
-    ) -> Poll<()> {
-        self.operation.poll_delay(state, retry, cx)
-    }
-}
-
-impl<O, D, T, E, Fut> FutureRetry<T, E, Fut> for WithDelay<O, D>
-where
-    O: FutureRetry<T, E, Fut>,
-    D: RetryDelay<FutureMode<T, E, Fut>>,
-    D::Wait: Future<Output = ()>,
-    Fut: Future<Output = Result<T, E>>,
-{
-    type Errors<const ATTEMPTS: usize> = O::Errors<ATTEMPTS>;
-
-    type DelayState = DelayState<O::DelayState, D::Wait>;
-
-    #[inline]
-    fn call(&mut self) -> Fut {
-        self.operation.call()
-    }
-
-    #[inline]
-    fn finish<const ATTEMPTS: usize>(errors: ErrorBuffer<E, ATTEMPTS>) -> Self::Errors<ATTEMPTS> {
-        O::finish(errors)
-    }
-
-    #[inline]
-    fn delay_state() -> Self::DelayState {
-        DelayState::new(O::delay_state())
-    }
-
-    #[inline]
-    fn should_retry(&mut self, error: &E) -> bool {
-        self.operation.should_retry(error)
-    }
-
-    #[inline]
-    fn inspect_retry(&mut self, retry: usize, error: &E) {
-        self.operation.inspect_retry(retry, error);
-    }
-
-    #[inline]
-    fn poll_delay(
-        &mut self,
-        state: &mut Self::DelayState,
-        retry: usize,
-        cx: &mut Context<'_>,
-    ) -> Poll<()> {
-        if state.future.is_empty() {
-            ready!(self.operation.poll_delay(&mut state.inner, retry, cx,));
-
-            state.future.ensure_active(|| self.delay.delay(retry));
-        }
-
-        ready!(state.future.poll(cx));
-
-        state.future.clear_ready_future();
-
-        Poll::Ready(())
-    }
-}
-
-impl<O, I, T, E, Fut> FutureRetry<T, E, Fut> for InspectRetry<O, I>
-where
-    O: FutureRetry<T, E, Fut>,
-    I: FnMut(usize, &E),
-    Fut: Future<Output = Result<T, E>>,
-{
-    type Errors<const ATTEMPTS: usize> = O::Errors<ATTEMPTS>;
-
-    type DelayState = O::DelayState;
-
-    #[inline]
-    fn call(&mut self) -> Fut {
-        self.operation.call()
-    }
-
-    #[inline]
-    fn finish<const ATTEMPTS: usize>(errors: ErrorBuffer<E, ATTEMPTS>) -> Self::Errors<ATTEMPTS> {
-        O::finish(errors)
-    }
-
-    #[inline]
-    fn delay_state() -> Self::DelayState {
-        O::delay_state()
-    }
-
-    #[inline]
-    fn should_retry(&mut self, error: &E) -> bool {
-        self.operation.should_retry(error)
-    }
-
-    #[inline]
-    fn inspect_retry(&mut self, retry: usize, error: &E) {
-        self.operation.inspect_retry(retry, error);
-
-        (self.inspect)(retry, error);
-    }
-
-    #[inline]
-    fn poll_delay(
-        &mut self,
-        state: &mut Self::DelayState,
-        retry: usize,
-        cx: &mut Context<'_>,
-    ) -> Poll<()> {
-        self.operation.poll_delay(state, retry, cx)
-    }
-}
 
 #[must_use = "futures do nothing unless awaited or polled"]
 #[doc(hidden)]
@@ -257,26 +22,6 @@ pub struct AsyncRetry<O, Fut, S, E, const ATTEMPTS: usize> {
     attempts: usize,
     phase: Phase,
     _pin: PhantomPinned,
-}
-
-impl<O, Fut, S, E, const ATTEMPTS: usize> AsyncRetry<O, Fut, S, E, ATTEMPTS> {
-    #[inline]
-    const fn new(operation: O, delay: S) -> Self {
-        Self {
-            operation,
-            future: FutureSlot::new(),
-            delay,
-            errors: ErrorBuffer::new(),
-            attempts: 0,
-            phase: Phase::Operation,
-            _pin: PhantomPinned,
-        }
-    }
-
-    #[inline]
-    fn take_errors(&mut self) -> ErrorBuffer<E, ATTEMPTS> {
-        mem::replace(&mut self.errors, ErrorBuffer::new())
-    }
 }
 
 impl<O, Fut, S, T, E, const ATTEMPTS: usize> Future for AsyncRetry<O, Fut, S, E, ATTEMPTS>
@@ -296,9 +41,7 @@ where
         if ATTEMPTS == 0 {
             this.future.complete();
 
-            let errors = this.take_errors();
-
-            return Poll::Ready(Err(O::finish(errors)));
+            return Poll::Ready(Err(O::finish(this.errors.take_buffer())));
         }
 
         let mut ready_retries = 0;
@@ -311,8 +54,7 @@ where
                     match ready!(this.future.poll(cx)) {
                         Ok(value) => {
                             this.future.complete();
-
-                            this.errors = ErrorBuffer::new();
+                            this.errors.clear();
 
                             return Poll::Ready(Ok(value));
                         }
@@ -327,9 +69,7 @@ where
 
                                 this.future.complete();
 
-                                let errors = this.take_errors();
-
-                                return Poll::Ready(Err(O::finish(errors)));
+                                return Poll::Ready(Err(O::finish(this.errors.take_buffer())));
                             }
 
                             if !this.operation.should_retry(&error) {
@@ -337,9 +77,7 @@ where
 
                                 this.future.complete();
 
-                                let errors = this.take_errors();
-
-                                return Poll::Ready(Err(O::finish(errors)));
+                                return Poll::Ready(Err(O::finish(this.errors.take_buffer())));
                             }
 
                             this.operation.inspect_retry(this.attempts, &error);
@@ -382,21 +120,6 @@ pub struct AsyncRetryOk<O, Fut, S, E, const ATTEMPTS: usize> {
     phase: Phase,
     _error: PhantomData<fn() -> E>,
     _pin: PhantomPinned,
-}
-
-impl<O, Fut, S, E, const ATTEMPTS: usize> AsyncRetryOk<O, Fut, S, E, ATTEMPTS> {
-    #[inline]
-    const fn new(operation: O, delay: S) -> Self {
-        Self {
-            operation,
-            future: FutureSlot::new(),
-            delay,
-            attempts: 0,
-            phase: Phase::Operation,
-            _error: PhantomData,
-            _pin: PhantomPinned,
-        }
-    }
 }
 
 impl<O, Fut, S, T, E, const ATTEMPTS: usize> Future for AsyncRetryOk<O, Fut, S, E, ATTEMPTS>
@@ -485,16 +208,6 @@ pub struct AsyncRetryOrElse<O, Fut, S, E, F, const ATTEMPTS: usize> {
     fallback: Option<F>,
 }
 
-impl<O, Fut, S, E, F, const ATTEMPTS: usize> AsyncRetryOrElse<O, Fut, S, E, F, ATTEMPTS> {
-    #[inline]
-    const fn new(retry: AsyncRetry<O, Fut, S, E, ATTEMPTS>, fallback: F) -> Self {
-        Self {
-            retry,
-            fallback: Some(fallback),
-        }
-    }
-}
-
 impl<O, Fut, S, T, E, F, const ATTEMPTS: usize> Future
     for AsyncRetryOrElse<O, Fut, S, E, F, ATTEMPTS>
 where
@@ -551,14 +264,30 @@ where
     fn retry<const ATTEMPTS: usize>(self) -> Self::RetryResult<ATTEMPTS> {
         let delay = O::delay_state();
 
-        AsyncRetry::new(self, delay)
+        AsyncRetry {
+            operation: self,
+            future: FutureSlot::new(),
+            delay,
+            errors: ErrorBuffer::new(),
+            attempts: 0,
+            phase: Phase::Operation,
+            _pin: PhantomPinned,
+        }
     }
 
     #[inline]
     fn retry_ok<const ATTEMPTS: usize>(self) -> Self::RetryOption<ATTEMPTS> {
         let delay = O::delay_state();
 
-        AsyncRetryOk::new(self, delay)
+        AsyncRetryOk {
+            operation: self,
+            future: FutureSlot::new(),
+            delay,
+            attempts: 0,
+            phase: Phase::Operation,
+            _error: PhantomData,
+            _pin: PhantomPinned,
+        }
     }
 
     #[inline]
@@ -568,6 +297,17 @@ where
     {
         let delay = O::delay_state();
 
-        AsyncRetryOrElse::new(AsyncRetry::new(self, delay), fallback)
+        AsyncRetryOrElse {
+            retry: AsyncRetry {
+                operation: self,
+                future: FutureSlot::new(),
+                delay,
+                errors: ErrorBuffer::new(),
+                attempts: 0,
+                phase: Phase::Operation,
+                _pin: PhantomPinned,
+            },
+            fallback: Some(fallback),
+        }
     }
 }

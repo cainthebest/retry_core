@@ -68,6 +68,26 @@ impl<E, const ATTEMPTS: usize> ErrorBuffer<E, ATTEMPTS> {
 
         unsafe { output.assume_init() }
     }
+
+    #[inline]
+    pub(crate) const fn take_buffer(&mut self) -> Self {
+        let buffer = unsafe { ptr::read(self) };
+
+        self.initialized = 0;
+
+        buffer
+    }
+
+    #[inline]
+    pub(crate) fn clear(&mut self) {
+        for index in 0..self.initialized {
+            unsafe {
+                self.entries[index].assume_init_drop();
+            }
+        }
+
+        self.initialized = 0;
+    }
 }
 
 impl<E, const ATTEMPTS: usize> AsRef<[E]> for ErrorBuffer<E, ATTEMPTS> {
@@ -78,11 +98,8 @@ impl<E, const ATTEMPTS: usize> AsRef<[E]> for ErrorBuffer<E, ATTEMPTS> {
 }
 
 impl<E, const ATTEMPTS: usize> Drop for ErrorBuffer<E, ATTEMPTS> {
+    #[inline]
     fn drop(&mut self) {
-        for index in 0..self.initialized {
-            unsafe {
-                self.entries[index].assume_init_drop();
-            }
-        }
+        self.clear();
     }
 }

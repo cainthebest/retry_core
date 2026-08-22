@@ -1,41 +1,17 @@
-use core::{future::Future, marker::PhantomData};
+use {
+    crate::{Retry, RetryMode},
+    core::marker::PhantomData,
+};
 
-use crate::{BlockingMode, FutureMode, Retry, RetryMode};
+mod delay;
+mod inspect;
+mod predicate;
 
-#[doc(hidden)]
-pub trait RetryDelay<Mode>
-where
-    Mode: RetryMode,
-{
-    type Wait;
-
-    fn delay(&mut self, retry: usize) -> Self::Wait;
-}
-
-impl<T, E, D> RetryDelay<BlockingMode<T, E>> for D
-where
-    D: FnMut(usize),
-{
-    type Wait = ();
-
-    #[inline]
-    fn delay(&mut self, retry: usize) -> Self::Wait {
-        self(retry);
-    }
-}
-
-impl<T, E, Fut, D, Wait> RetryDelay<FutureMode<T, E, Fut>> for D
-where
-    D: FnMut(usize) -> Wait,
-    Wait: Future<Output = ()>,
-{
-    type Wait = Wait;
-
-    #[inline]
-    fn delay(&mut self, retry: usize) -> Self::Wait {
-        self(retry)
-    }
-}
+pub(crate) use {
+    delay::{RetryDelay, WithDelay},
+    inspect::InspectRetry,
+    predicate::OnlyIf,
+};
 
 #[doc(hidden)]
 pub struct RetryPolicy<O, Mode> {
@@ -107,22 +83,4 @@ where
     {
         self.operation.retry_or_else::<ATTEMPTS, F>(fallback)
     }
-}
-
-#[doc(hidden)]
-pub struct OnlyIf<O, P> {
-    pub(crate) operation: O,
-    pub(crate) predicate: P,
-}
-
-#[doc(hidden)]
-pub struct WithDelay<O, D> {
-    pub(crate) operation: O,
-    pub(crate) delay: D,
-}
-
-#[doc(hidden)]
-pub struct InspectRetry<O, I> {
-    pub(crate) operation: O,
-    pub(crate) inspect: I,
 }
