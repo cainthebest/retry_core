@@ -33,3 +33,7 @@ path = "examples/tokio/args.rs"
 [[example]]
 name = "tokio_zero_arg"
 path = "examples/tokio/zero_arg.rs"
+
+[[example]]
+name = "expanded_readme"
+path = "examples/expanded_readme.rs"
