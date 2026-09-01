@@ -1,6 +1,6 @@
 use core::{mem::MaybeUninit, ptr};
 
-pub struct ErrorBuffer<E, const ATTEMPTS: usize> {
+pub(crate) struct ErrorBuffer<E, const ATTEMPTS: usize> {
     entries: [MaybeUninit<E>; ATTEMPTS],
     initialized: usize,
 }
