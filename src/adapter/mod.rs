@@ -5,12 +5,10 @@ use {
 
 mod delay;
 mod inspect;
-mod predicate;
 
 pub(crate) use {
     delay::{RetryDelay, WithDelay},
     inspect::InspectRetry,
-    predicate::OnlyIf,
 };
 
 #[doc(hidden)]
@@ -24,20 +22,6 @@ where
     Mode: RetryMode,
     O: Retry<Mode>,
 {
-    #[inline]
-    pub fn only_if<P>(self, predicate: P) -> RetryPolicy<OnlyIf<O, P>, Mode>
-    where
-        P: FnMut(&O::Error) -> bool,
-    {
-        RetryPolicy {
-            operation: OnlyIf {
-                operation: self.operation,
-                predicate,
-            },
-            _mode: PhantomData,
-        }
-    }
-
     #[inline]
     pub fn with_delay<D>(self, delay: D) -> RetryPolicy<WithDelay<O, D>, Mode>
     where
@@ -79,7 +63,7 @@ where
     #[inline]
     pub fn retry_or_else<const ATTEMPTS: usize, F>(self, fallback: F) -> O::RetryValue<ATTEMPTS, F>
     where
-        F: FnOnce(O::Errors<ATTEMPTS>) -> O::Output,
+        F: FnOnce([O::Error; ATTEMPTS]) -> O::Output,
     {
         self.operation.retry_or_else::<ATTEMPTS, F>(fallback)
     }

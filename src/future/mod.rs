@@ -1,9 +1,6 @@
-use {
-    crate::storage::ErrorBuffer,
-    core::{
-        future::Future,
-        task::{Context, Poll},
-    },
+use core::{
+    future::Future,
+    task::{Context, Poll},
 };
 
 mod adapters;
@@ -26,20 +23,11 @@ pub trait FutureRetry<T, E, Fut>: Sized
 where
     Fut: Future<Output = Result<T, E>>,
 {
-    type Errors<const ATTEMPTS: usize>;
-
     type DelayState;
 
     fn call(&mut self) -> Fut;
 
-    fn finish<const ATTEMPTS: usize>(errors: ErrorBuffer<E, ATTEMPTS>) -> Self::Errors<ATTEMPTS>;
-
     fn delay_state() -> Self::DelayState;
-
-    #[inline]
-    fn should_retry(&mut self, _error: &E) -> bool {
-        true
-    }
 
     #[inline]
     fn inspect_retry(&mut self, _retry: usize, _error: &E) {}
@@ -60,20 +48,11 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, E>>,
 {
-    type Errors<const ATTEMPTS: usize> = [E; ATTEMPTS];
-
     type DelayState = ();
 
     #[inline]
     fn call(&mut self) -> Fut {
         self()
-    }
-
-    #[inline]
-    fn finish<const ATTEMPTS: usize>(
-        mut errors: ErrorBuffer<E, ATTEMPTS>,
-    ) -> Self::Errors<ATTEMPTS> {
-        errors.take()
     }
 
     #[inline]

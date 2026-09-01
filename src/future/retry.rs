@@ -1,7 +1,8 @@
 use {
     super::{FutureRetry, MAX_READY_RETRIES_PER_POLL, Phase},
     crate::{
-        FutureMode, Retry,
+        Retry,
+        mode::FutureMode,
         storage::{ErrorBuffer, FutureSlot},
     },
     core::{
@@ -29,7 +30,7 @@ where
     O: FutureRetry<T, E, Fut, DelayState = S>,
     Fut: Future<Output = Result<T, E>>,
 {
-    type Output = Result<T, O::Errors<ATTEMPTS>>;
+    type Output = Result<T, [E; ATTEMPTS]>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = unsafe { self.get_unchecked_mut() };
@@ -41,7 +42,7 @@ where
         if ATTEMPTS == 0 {
             this.future.complete();
 
-            return Poll::Ready(Err(O::finish(this.errors.take_buffer())));
+            return Poll::Ready(Err(this.errors.take()));
         }
 
         let mut ready_retries = 0;
@@ -69,15 +70,7 @@ where
 
                                 this.future.complete();
 
-                                return Poll::Ready(Err(O::finish(this.errors.take_buffer())));
-                            }
-
-                            if !this.operation.should_retry(&error) {
-                                this.errors.push(error);
-
-                                this.future.complete();
-
-                                return Poll::Ready(Err(O::finish(this.errors.take_buffer())));
+                                return Poll::Ready(Err(this.errors.take()));
                             }
 
                             this.operation.inspect_retry(this.attempts, &error);
@@ -92,7 +85,7 @@ where
                 Phase::Delay => {
                     ready!(
                         this.operation
-                            .poll_delay(&mut this.delay, this.attempts, cx,)
+                            .poll_delay(&mut this.delay, this.attempts, cx)
                     );
 
                     this.phase = Phase::Operation;
@@ -167,12 +160,6 @@ where
                                 return Poll::Ready(None);
                             }
 
-                            if !this.operation.should_retry(&error) {
-                                this.future.complete();
-
-                                return Poll::Ready(None);
-                            }
-
                             this.operation.inspect_retry(this.attempts, &error);
 
                             this.phase = Phase::Delay;
@@ -183,7 +170,7 @@ where
                 Phase::Delay => {
                     ready!(
                         this.operation
-                            .poll_delay(&mut this.delay, this.attempts, cx,)
+                            .poll_delay(&mut this.delay, this.attempts, cx)
                     );
 
                     this.phase = Phase::Operation;
@@ -213,7 +200,7 @@ impl<O, Fut, S, T, E, F, const ATTEMPTS: usize> Future
 where
     O: FutureRetry<T, E, Fut, DelayState = S>,
     Fut: Future<Output = Result<T, E>>,
-    F: FnOnce(O::Errors<ATTEMPTS>) -> T,
+    F: FnOnce([E; ATTEMPTS]) -> T,
 {
     type Output = T;
 
@@ -247,9 +234,8 @@ where
     Fut: Future<Output = Result<T, E>>,
 {
     type Output = T;
-    type Error = E;
 
-    type Errors<const ATTEMPTS: usize> = O::Errors<ATTEMPTS>;
+    type Error = E;
 
     type RetryResult<const ATTEMPTS: usize> = AsyncRetry<O, Fut, O::DelayState, E, ATTEMPTS>;
 
@@ -258,16 +244,14 @@ where
     type RetryValue<const ATTEMPTS: usize, F>
         = AsyncRetryOrElse<O, Fut, O::DelayState, E, F, ATTEMPTS>
     where
-        F: FnOnce(Self::Errors<ATTEMPTS>) -> T;
+        F: FnOnce([E; ATTEMPTS]) -> T;
 
     #[inline]
     fn retry<const ATTEMPTS: usize>(self) -> Self::RetryResult<ATTEMPTS> {
-        let delay = O::delay_state();
-
         AsyncRetry {
             operation: self,
             future: FutureSlot::new(),
-            delay,
+            delay: O::delay_state(),
             errors: ErrorBuffer::new(),
             attempts: 0,
             phase: Phase::Operation,
@@ -277,12 +261,10 @@ where
 
     #[inline]
     fn retry_ok<const ATTEMPTS: usize>(self) -> Self::RetryOption<ATTEMPTS> {
-        let delay = O::delay_state();
-
         AsyncRetryOk {
             operation: self,
             future: FutureSlot::new(),
-            delay,
+            delay: O::delay_state(),
             attempts: 0,
             phase: Phase::Operation,
             _error: PhantomData,
@@ -293,20 +275,19 @@ where
     #[inline]
     fn retry_or_else<const ATTEMPTS: usize, F>(self, fallback: F) -> Self::RetryValue<ATTEMPTS, F>
     where
-        F: FnOnce(Self::Errors<ATTEMPTS>) -> T,
+        F: FnOnce([E; ATTEMPTS]) -> T,
     {
-        let delay = O::delay_state();
-
         AsyncRetryOrElse {
             retry: AsyncRetry {
                 operation: self,
                 future: FutureSlot::new(),
-                delay,
+                delay: O::delay_state(),
                 errors: ErrorBuffer::new(),
                 attempts: 0,
                 phase: Phase::Operation,
                 _pin: PhantomPinned,
             },
+
             fallback: Some(fallback),
         }
     }

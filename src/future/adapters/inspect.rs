@@ -1,6 +1,6 @@
 use {
     super::super::FutureRetry,
-    crate::{adapter::InspectRetry, storage::ErrorBuffer},
+    crate::adapter::InspectRetry,
     core::{
         future::Future,
         task::{Context, Poll},
@@ -13,8 +13,6 @@ where
     I: FnMut(usize, &E),
     Fut: Future<Output = Result<T, E>>,
 {
-    type Errors<const ATTEMPTS: usize> = O::Errors<ATTEMPTS>;
-
     type DelayState = O::DelayState;
 
     #[inline]
@@ -23,18 +21,8 @@ where
     }
 
     #[inline]
-    fn finish<const ATTEMPTS: usize>(errors: ErrorBuffer<E, ATTEMPTS>) -> Self::Errors<ATTEMPTS> {
-        O::finish(errors)
-    }
-
-    #[inline]
     fn delay_state() -> Self::DelayState {
         O::delay_state()
-    }
-
-    #[inline]
-    fn should_retry(&mut self, error: &E) -> bool {
-        self.operation.should_retry(error)
     }
 
     #[inline]

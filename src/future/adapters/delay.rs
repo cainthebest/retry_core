@@ -1,9 +1,8 @@
 use {
     super::super::{DelayState, FutureRetry},
     crate::{
-        FutureMode,
         adapter::{RetryDelay, WithDelay},
-        storage::ErrorBuffer,
+        mode::FutureMode,
     },
     core::{
         future::Future,
@@ -18,8 +17,6 @@ where
     D::Wait: Future<Output = ()>,
     Fut: Future<Output = Result<T, E>>,
 {
-    type Errors<const ATTEMPTS: usize> = O::Errors<ATTEMPTS>;
-
     type DelayState = DelayState<O::DelayState, D::Wait>;
 
     #[inline]
@@ -28,18 +25,8 @@ where
     }
 
     #[inline]
-    fn finish<const ATTEMPTS: usize>(errors: ErrorBuffer<E, ATTEMPTS>) -> Self::Errors<ATTEMPTS> {
-        O::finish(errors)
-    }
-
-    #[inline]
     fn delay_state() -> Self::DelayState {
         DelayState::new(O::delay_state())
-    }
-
-    #[inline]
-    fn should_retry(&mut self, error: &E) -> bool {
-        self.operation.should_retry(error)
     }
 
     #[inline]

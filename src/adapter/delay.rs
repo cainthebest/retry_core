@@ -1,4 +1,4 @@
-use crate::{BlockingMode, FutureMode, RetryMode};
+use crate::mode::{BlockingMode, FutureMode, RetryMode};
 
 #[doc(hidden)]
 pub trait RetryDelay<Mode>

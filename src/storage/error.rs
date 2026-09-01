@@ -1,4 +1,4 @@
-use core::{mem::MaybeUninit, ptr, slice};
+use core::{mem::MaybeUninit, ptr};
 
 pub struct ErrorBuffer<E, const ATTEMPTS: usize> {
     entries: [MaybeUninit<E>; ATTEMPTS],
@@ -12,31 +12,6 @@ impl<E, const ATTEMPTS: usize> ErrorBuffer<E, ATTEMPTS> {
             entries: [const { MaybeUninit::uninit() }; ATTEMPTS],
             initialized: 0,
         }
-    }
-
-    #[inline]
-    pub const fn len(&self) -> usize {
-        self.initialized
-    }
-
-    #[inline]
-    pub const fn is_empty(&self) -> bool {
-        self.initialized == 0
-    }
-
-    #[inline]
-    pub const fn is_full(&self) -> bool {
-        self.initialized == ATTEMPTS
-    }
-
-    #[inline]
-    pub const fn capacity(&self) -> usize {
-        ATTEMPTS
-    }
-
-    #[inline]
-    pub fn as_slice(&self) -> &[E] {
-        unsafe { slice::from_raw_parts(self.entries.as_ptr().cast::<E>(), self.initialized) }
     }
 
     #[inline]
@@ -70,15 +45,6 @@ impl<E, const ATTEMPTS: usize> ErrorBuffer<E, ATTEMPTS> {
     }
 
     #[inline]
-    pub(crate) const fn take_buffer(&mut self) -> Self {
-        let buffer = unsafe { ptr::read(self) };
-
-        self.initialized = 0;
-
-        buffer
-    }
-
-    #[inline]
     pub(crate) fn clear(&mut self) {
         for index in 0..self.initialized {
             unsafe {
@@ -87,13 +53,6 @@ impl<E, const ATTEMPTS: usize> ErrorBuffer<E, ATTEMPTS> {
         }
 
         self.initialized = 0;
-    }
-}
-
-impl<E, const ATTEMPTS: usize> AsRef<[E]> for ErrorBuffer<E, ATTEMPTS> {
-    #[inline]
-    fn as_ref(&self) -> &[E] {
-        self.as_slice()
     }
 }
 
