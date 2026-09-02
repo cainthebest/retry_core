@@ -55,7 +55,6 @@ where
                     match ready!(this.future.poll(cx)) {
                         Ok(value) => {
                             this.future.complete();
-                            this.errors.clear();
 
                             return Poll::Ready(Ok(value));
                         }

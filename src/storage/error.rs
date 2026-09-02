@@ -43,22 +43,15 @@ impl<E, const ATTEMPTS: usize> ErrorBuffer<E, ATTEMPTS> {
 
         unsafe { output.assume_init() }
     }
-
-    #[inline]
-    pub(crate) fn clear(&mut self) {
-        for index in 0..self.initialized {
-            unsafe {
-                self.entries[index].assume_init_drop();
-            }
-        }
-
-        self.initialized = 0;
-    }
 }
 
 impl<E, const ATTEMPTS: usize> Drop for ErrorBuffer<E, ATTEMPTS> {
     #[inline]
     fn drop(&mut self) {
-        self.clear();
+        for index in 0..self.initialized {
+            unsafe {
+                self.entries[index].assume_init_drop();
+            }
+        }
     }
 }
