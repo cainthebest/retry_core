@@ -28,7 +28,7 @@ impl<Fut> FutureSlot<Fut> {
     }
 
     #[inline]
-    const fn is_empty(&self) -> bool {
+    pub(crate) const fn is_empty(&self) -> bool {
         matches!(self.state, FutureSlotState::Empty)
     }
 
@@ -76,9 +76,9 @@ impl<Fut> FutureSlot<Fut> {
     }
 
     #[inline]
-    pub(crate) fn poll_result<T, E>(&mut self, cx: &mut Context<'_>) -> Poll<Result<T, E>>
+    pub(crate) fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Fut::Output>
     where
-        Fut: Future<Output = Result<T, E>>,
+        Fut: Future,
     {
         assert!(
             self.is_active(),
