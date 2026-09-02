@@ -7,7 +7,7 @@ repository  = "https://github.com/cainthebest/retry_core"
 authors     = ["cainthebest <https://github.com/cainthebest>"]
 description = "A retry library for fallible blocking and async operations"
 keywords    = ["retry", "async", "blocking", "resilience", "no-std"]
-categories  = ["asynchronous", "no-std::no-alloc"]
+categories  = ["asynchronous", "no-std", "no-std::no-alloc"]
 
 [profile.release]
 codegen-units = 1
