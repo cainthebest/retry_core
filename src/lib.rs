@@ -326,7 +326,7 @@
 //! ATTEMPTS * size_of::<E>()
 //! ```
 //!
-//! plus small bookkeeping overhead where [`ErrorBuffer`] is used.
+//! plus small bookkeeping overhead for the internal error buffer.
 //!
 //! Errors are moved into storage, `E` does not need to implement `Clone`.
 //!
