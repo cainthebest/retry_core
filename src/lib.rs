@@ -472,7 +472,7 @@ mod future;
 ///
 /// # Retry policies
 ///
-/// Call [`Retry::retry_policy`] before adding conditional, delay, or inspection behavior:
+/// Call [`Retry::retry_policy`] before adding delay or inspection behavior:
 ///
 /// ```rust
 /// use retry_core::Retry;
