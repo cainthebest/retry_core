@@ -6,6 +6,7 @@ use {
     },
     core::{
         future::Future,
+        pin::Pin,
         task::{Context, Poll, ready},
     },
 };
@@ -52,19 +53,40 @@ where
     #[inline]
     fn poll_delay(
         &mut self,
-        state: &mut Self::DelayState,
+        state: Pin<&mut Self::DelayState>,
         retry: usize,
         cx: &mut Context<'_>,
     ) -> Poll<()> {
-        if state.future.is_empty() {
-            ready!(self.operation.poll_delay(&mut state.inner, retry, cx));
+        // SAFETY:
+        //
+        // `state` is pinned. `inner` and `future` are treated as
+        // structurally pinned and are never moved through `state`.
+        let state = unsafe { state.get_unchecked_mut() };
 
-            state.future.ensure_active(|| self.delay.delay(retry));
+        if state.future.is_empty() {
+            // SAFETY:
+            //
+            // `inner` is structurally pinned by the pinned `DelayState`.
+            let inner = unsafe { Pin::new_unchecked(&mut state.inner) };
+
+            ready!(self.operation.poll_delay(inner, retry, cx));
+
+            // SAFETY:
+            //
+            // `future` is structurally pinned by the pinned `DelayState`.
+            let future = unsafe { Pin::new_unchecked(&mut state.future) };
+
+            future.ensure_active(|| self.delay.delay(retry));
         }
 
-        ready!(state.future.poll(cx));
+        // SAFETY:
+        //
+        // `future` is structurally pinned by the pinned `DelayState`.
+        let mut future = unsafe { Pin::new_unchecked(&mut state.future) };
 
-        state.future.clear_ready_future();
+        ready!(future.as_mut().poll(cx));
+
+        future.clear_ready_future();
 
         Poll::Ready(())
     }

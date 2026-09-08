@@ -34,7 +34,7 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // SAFETY:
         //
-        // No pinned field is moved through `this`.
+        // `future` and `delay` are treated as structurally pinned and are never moved through `this`.
         let this = unsafe { self.get_unchecked_mut() };
 
         if this.future.is_complete() {
@@ -44,7 +44,10 @@ where
         }
 
         if ATTEMPTS == 0 {
-            this.future.complete();
+            // SAFETY:
+            //
+            // `future` is structurally pinned by the pinned `AsyncRetry`.
+            unsafe { Pin::new_unchecked(&mut this.future) }.complete();
 
             return Poll::Ready(Err(this.errors.take()));
         }
@@ -53,10 +56,12 @@ where
 
         loop {
             if O::HAS_DELAY && matches!(this.phase, Phase::Delay) {
-                ready!(
-                    this.operation
-                        .poll_delay(&mut this.delay, this.errors.len(), cx)
-                );
+                // SAFETY:
+                //
+                // `delay` is structurally pinned by the pinned `AsyncRetry`.
+                let delay = unsafe { Pin::new_unchecked(&mut this.delay) };
+
+                ready!(this.operation.poll_delay(delay, this.errors.len(), cx));
 
                 this.phase = Phase::Operation;
 
@@ -71,11 +76,16 @@ where
                 }
             }
 
-            this.future.ensure_active(|| this.operation.call());
+            // SAFETY:
+            //
+            // `future` is structurally pinned by the pinned `AsyncRetry`.
+            let mut future = unsafe { Pin::new_unchecked(&mut this.future) };
 
-            match ready!(this.future.poll(cx)) {
+            future.as_mut().ensure_active(|| this.operation.call());
+
+            match ready!(future.as_mut().poll(cx)) {
                 Ok(value) => {
-                    this.future.complete();
+                    future.complete();
 
                     return Poll::Ready(Ok(value));
                 }
@@ -85,12 +95,12 @@ where
 
                     if retry == ATTEMPTS {
                         this.errors.push(error);
-                        this.future.complete();
+                        future.complete();
 
                         return Poll::Ready(Err(this.errors.take()));
                     }
 
-                    this.future.clear_ready_future();
+                    future.clear_ready_future();
 
                     this.operation.inspect_retry(retry, &error);
                     this.errors.push(error);
@@ -133,7 +143,7 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // SAFETY:
         //
-        // No pinned field is moved through `this`.
+        // `future` and `delay` are treated as structurally pinned and are never moved through `this`.
         let this = unsafe { self.get_unchecked_mut() };
 
         if this.future.is_complete() {
@@ -143,7 +153,10 @@ where
         }
 
         if ATTEMPTS == 0 {
-            this.future.complete();
+            // SAFETY:
+            //
+            // `future` is structurally pinned by the pinned `AsyncRetryOk`.
+            unsafe { Pin::new_unchecked(&mut this.future) }.complete();
 
             return Poll::Ready(None);
         }
@@ -152,10 +165,12 @@ where
 
         loop {
             if O::HAS_DELAY && matches!(this.phase, Phase::Delay) {
-                ready!(
-                    this.operation
-                        .poll_delay(&mut this.delay, this.attempts, cx)
-                );
+                // SAFETY:
+                //
+                // `delay` is structurally pinned by the pinned `AsyncRetryOk`.
+                let delay = unsafe { Pin::new_unchecked(&mut this.delay) };
+
+                ready!(this.operation.poll_delay(delay, this.attempts, cx));
 
                 this.phase = Phase::Operation;
 
@@ -170,11 +185,16 @@ where
                 }
             }
 
-            this.future.ensure_active(|| this.operation.call());
+            // SAFETY:
+            //
+            // `future` is structurally pinned by the pinned `AsyncRetryOk`.
+            let mut future = unsafe { Pin::new_unchecked(&mut this.future) };
 
-            match ready!(this.future.poll(cx)) {
+            future.as_mut().ensure_active(|| this.operation.call());
+
+            match ready!(future.as_mut().poll(cx)) {
                 Ok(value) => {
-                    this.future.complete();
+                    future.complete();
 
                     return Poll::Ready(Some(value));
                 }
@@ -183,12 +203,12 @@ where
                     this.attempts += 1;
 
                     if this.attempts == ATTEMPTS {
-                        this.future.complete();
+                        future.complete();
 
                         return Poll::Ready(None);
                     }
 
-                    this.future.clear_ready_future();
+                    future.clear_ready_future();
 
                     this.operation.inspect_retry(this.attempts, &error);
 

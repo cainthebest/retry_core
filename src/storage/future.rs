@@ -33,41 +33,45 @@ impl<Fut> FutureSlot<Fut> {
     }
 
     #[inline]
-    pub(crate) fn ensure_active<F>(&mut self, future: F)
+    pub(crate) fn ensure_active<F>(mut self: Pin<&mut Self>, future: F)
     where
         F: FnOnce() -> Fut,
     {
-        if self.is_empty() {
-            *self = Self::Active(future());
+        if self.as_ref().get_ref().is_empty() {
+            self.set(Self::Active(future()));
         }
     }
 
     #[inline]
-    pub(crate) fn clear_ready_future(&mut self) {
-        debug_assert!(matches!(self, Self::Active(_)));
+    pub(crate) fn clear_ready_future(mut self: Pin<&mut Self>) {
+        debug_assert!(matches!(self.as_ref().get_ref(), Self::Active(_)));
 
-        *self = Self::Empty;
+        self.set(Self::Empty);
     }
 
     #[inline]
-    pub(crate) fn complete(&mut self) {
-        *self = Self::Complete;
+    pub(crate) fn complete(mut self: Pin<&mut Self>) {
+        self.set(Self::Complete);
     }
 
     #[inline]
-    pub(crate) fn poll(&mut self, cx: &mut Context<'_>) -> Poll<Fut::Output>
+    pub(crate) fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Fut::Output>
     where
         Fut: Future,
     {
-        let Self::Active(future) = self else {
+        // SAFETY:
+        //
+        // `FutureSlot` is pinned, and the active future is structurally
+        // pinned by the slot. The future is never moved while active.
+        let this = unsafe { self.get_unchecked_mut() };
+
+        let Self::Active(future) = this else {
             panic!("future slot must be active before polling");
         };
 
         // SAFETY:
         //
-        // The owning retry future is pinned before polling and remains pinned
-        // for the lifetime of the active future, so the future is not moved
-        // after it has been polled.
+        // `future` is structurally pinned by the pinned `FutureSlot`.
         unsafe { Pin::new_unchecked(future) }.poll(cx)
     }
 }

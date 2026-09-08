@@ -1,5 +1,6 @@
 use core::{
     future::Future,
+    pin::Pin,
     task::{Context, Poll},
 };
 
@@ -36,7 +37,7 @@ where
     #[inline]
     fn poll_delay(
         &mut self,
-        _state: &mut Self::DelayState,
+        _state: Pin<&mut Self::DelayState>,
         _retry: usize,
         _cx: &mut Context<'_>,
     ) -> Poll<()> {
