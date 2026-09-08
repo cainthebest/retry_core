@@ -6,6 +6,18 @@ use {
     },
 };
 
+impl<T, E, D> RetryDelay<BlockingMode<T, E>> for D
+where
+    D: FnMut(usize),
+{
+    type Wait = ();
+
+    #[inline]
+    fn delay(&mut self, retry: usize) -> Self::Wait {
+        self(retry);
+    }
+}
+
 impl<O, D, T, E> BlockingRetry<T, E> for WithDelay<O, D>
 where
     O: BlockingRetry<T, E>,

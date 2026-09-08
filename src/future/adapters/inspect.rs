@@ -15,6 +15,8 @@ where
 {
     type DelayState = O::DelayState;
 
+    const HAS_DELAY: bool = O::HAS_DELAY;
+
     #[inline]
     fn call(&mut self) -> Fut {
         self.operation.call()
@@ -28,7 +30,6 @@ where
     #[inline]
     fn inspect_retry(&mut self, retry: usize, error: &E) {
         self.operation.inspect_retry(retry, error);
-
         (self.inspect)(retry, error);
     }
 

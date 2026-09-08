@@ -11,7 +11,6 @@ pub(crate) use delay::DelayState;
 
 const MAX_READY_RETRIES_PER_POLL: usize = 64;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 enum Phase {
     Operation,
@@ -24,6 +23,8 @@ where
     Fut: Future<Output = Result<T, E>>,
 {
     type DelayState;
+
+    const HAS_DELAY: bool = false;
 
     fn call(&mut self) -> Fut;
 

@@ -10,6 +10,19 @@ use {
     },
 };
 
+impl<T, E, Fut, D, Wait> RetryDelay<FutureMode<T, E, Fut>> for D
+where
+    D: FnMut(usize) -> Wait,
+    Wait: Future<Output = ()>,
+{
+    type Wait = Wait;
+
+    #[inline]
+    fn delay(&mut self, retry: usize) -> Self::Wait {
+        self(retry)
+    }
+}
+
 impl<O, D, T, E, Fut> FutureRetry<T, E, Fut> for WithDelay<O, D>
 where
     O: FutureRetry<T, E, Fut>,
@@ -18,6 +31,8 @@ where
     Fut: Future<Output = Result<T, E>>,
 {
     type DelayState = DelayState<O::DelayState, D::Wait>;
+
+    const HAS_DELAY: bool = true;
 
     #[inline]
     fn call(&mut self) -> Fut {
