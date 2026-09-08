@@ -386,10 +386,10 @@
 //!
 //! ### Pinning and completion
 //!
-//! Async retry values are `!Unpin` because active operation and delay futures
-//! can be retained in pinned inline storage.
+//! Async retry futures inherit the pinning requirements of their stored state.
+//! In particular, if an operation or delay future is `!Unpin`, the containing retry future is also `!Unpin`.
 //!
-//! Normal `.await` usage handles this automatically.
+//! Normal `.await` usage handles pinning automatically.
 //!
 //! After an async retry returns `Poll::Ready`, polling it again panics.
 //!

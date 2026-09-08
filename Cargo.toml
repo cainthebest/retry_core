@@ -1,17 +1,17 @@
 [package]
-license     = "MIT"
-edition     = "2024"
-version     = "1.0.0-beta.2"
-name        = "retry_core"
-repository  = "https://github.com/cainthebest/retry_core"
-authors     = ["cainthebest <https://github.com/cainthebest>"]
-description = "A retry library for fallible blocking and async operations"
-keywords    = ["retry", "async", "blocking", "resilience", "no-std"]
-categories  = ["asynchronous", "no-std", "no-std::no-alloc"]
+license      = "MIT"
+edition      = "2024"
+rust-version = "1.95.0"
+version      = "1.0.0-beta.2"
+name         = "retry_core"
+repository   = "https://github.com/cainthebest/retry_core"
+authors      = ["cainthebest <https://github.com/cainthebest>"]
+description  = "A retry library for fallible blocking and async operations"
+keywords     = ["retry", "async", "blocking", "resilience", "no-std"]
+categories   = ["asynchronous", "no-std", "no-std::no-alloc"]
 
 [profile.release]
 codegen-units = 1
 opt-level     = 3
 lto           = 'fat'
 debug         = false
-

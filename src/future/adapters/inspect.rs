@@ -3,6 +3,7 @@ use {
     crate::adapter::InspectRetry,
     core::{
         future::Future,
+        pin::Pin,
         task::{Context, Poll},
     },
 };
@@ -14,6 +15,8 @@ where
     Fut: Future<Output = Result<T, E>>,
 {
     type DelayState = O::DelayState;
+
+    const HAS_DELAY: bool = O::HAS_DELAY;
 
     #[inline]
     fn call(&mut self) -> Fut {
@@ -28,14 +31,13 @@ where
     #[inline]
     fn inspect_retry(&mut self, retry: usize, error: &E) {
         self.operation.inspect_retry(retry, error);
-
         (self.inspect)(retry, error);
     }
 
     #[inline]
     fn poll_delay(
         &mut self,
-        state: &mut Self::DelayState,
+        state: Pin<&mut Self::DelayState>,
         retry: usize,
         cx: &mut Context<'_>,
     ) -> Poll<()> {

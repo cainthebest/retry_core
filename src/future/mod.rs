@@ -1,5 +1,6 @@
 use core::{
     future::Future,
+    pin::Pin,
     task::{Context, Poll},
 };
 
@@ -11,7 +12,6 @@ pub(crate) use delay::DelayState;
 
 const MAX_READY_RETRIES_PER_POLL: usize = 64;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 enum Phase {
     Operation,
@@ -25,6 +25,8 @@ where
 {
     type DelayState;
 
+    const HAS_DELAY: bool = false;
+
     fn call(&mut self) -> Fut;
 
     fn delay_state() -> Self::DelayState;
@@ -35,7 +37,7 @@ where
     #[inline]
     fn poll_delay(
         &mut self,
-        _state: &mut Self::DelayState,
+        _state: Pin<&mut Self::DelayState>,
         _retry: usize,
         _cx: &mut Context<'_>,
     ) -> Poll<()> {

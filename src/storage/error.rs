@@ -15,6 +15,11 @@ impl<E, const ATTEMPTS: usize> ErrorBuffer<E, ATTEMPTS> {
     }
 
     #[inline]
+    pub(crate) const fn len(&self) -> usize {
+        self.initialized
+    }
+
+    #[inline]
     pub(crate) const fn push(&mut self, error: E) {
         assert!(self.initialized < ATTEMPTS, "attempt error buffer is full");
 
@@ -29,19 +34,10 @@ impl<E, const ATTEMPTS: usize> ErrorBuffer<E, ATTEMPTS> {
             "attempt error buffer must be full before unwrapping"
         );
 
-        let mut output = MaybeUninit::<[E; ATTEMPTS]>::uninit();
-
-        unsafe {
-            ptr::copy_nonoverlapping(
-                self.entries.as_ptr(),
-                output.as_mut_ptr().cast::<MaybeUninit<E>>(),
-                ATTEMPTS,
-            );
-        }
-
         self.initialized = 0;
 
-        unsafe { output.assume_init() }
+        // SAFETY: every entry was initialized and ownership is transferred.
+        unsafe { ptr::read(self.entries.as_ptr().cast::<[E; ATTEMPTS]>()) }
     }
 }
 
