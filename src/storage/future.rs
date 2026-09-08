@@ -18,18 +18,12 @@ impl<Fut> FutureSlot<Fut> {
 
     #[inline]
     pub(crate) const fn is_empty(&self) -> bool {
-        match self {
-            Self::Empty => true,
-            _ => false,
-        }
+        matches!(self, Self::Empty)
     }
 
     #[inline]
     pub(crate) const fn is_complete(&self) -> bool {
-        match self {
-            Self::Complete => true,
-            _ => false,
-        }
+        matches!(self, Self::Complete)
     }
 
     #[inline]
