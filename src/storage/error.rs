@@ -51,3 +51,7 @@ impl<E, const ATTEMPTS: usize> Drop for ErrorBuffer<E, ATTEMPTS> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "error.test.rs"]
+mod tests;
