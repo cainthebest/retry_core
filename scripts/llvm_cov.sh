@@ -2,7 +2,4 @@
 
 set -euo pipefail
 
-cargo llvm-cov \
-  --open \
-  --ignore-filename-regex '\.test\.rs$' \
-  "$@"
+cargo llvm-cov --ignore-filename-regex '\.test\.rs$' "$@"
