@@ -68,3 +68,7 @@ where
         self.operation.retry_or_else::<ATTEMPTS, F>(fallback)
     }
 }
+
+#[cfg(test)]
+#[path = "mod.test.rs"]
+mod tests;

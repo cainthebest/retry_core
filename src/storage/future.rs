@@ -69,3 +69,7 @@ impl<Fut> FutureSlot<Fut> {
         unsafe { Pin::new_unchecked(future) }.poll(cx)
     }
 }
+
+#[cfg(test)]
+#[path = "future.test.rs"]
+mod tests;

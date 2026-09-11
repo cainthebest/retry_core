@@ -40,3 +40,7 @@ where
         let _ = self.delay.delay(retry);
     }
 }
+
+#[cfg(test)]
+#[path = "delay.test.rs"]
+mod tests;

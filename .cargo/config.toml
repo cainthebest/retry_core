@@ -1,0 +1,5 @@
+[env]
+MIRIFLAGS = "-Zmiri-strict-provenance -Zmiri-symbolic-alignment-check -Zmiri-tree-borrows"
+
+[alias]
+cov = "llvm-cov --ignore-filename-regex \\.test\\.rs$"

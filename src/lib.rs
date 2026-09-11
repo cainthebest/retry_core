@@ -425,6 +425,9 @@
 //! This keeps the crate `no_std`, runtime independent, and usable with blocking,
 //! async, embedded, and custom execution environments.
 
+#[cfg(test)]
+extern crate std;
+
 use {
     crate::{adapter::RetryPolicy, mode::RetryMode},
     core::marker::PhantomData,
