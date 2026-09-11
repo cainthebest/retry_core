@@ -22,3 +22,7 @@ where
         self.operation.delay(retry);
     }
 }
+
+#[cfg(test)]
+#[path = "inspect.test.rs"]
+mod tests;

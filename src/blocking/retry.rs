@@ -41,3 +41,7 @@ where
         }
     }
 }
+
+#[cfg(test)]
+#[path = "retry.test.rs"]
+mod tests;
